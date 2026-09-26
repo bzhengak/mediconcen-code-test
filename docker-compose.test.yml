@@ -1,0 +1,62 @@
+name: mediconcen-code-test-e2e
+
+# The credentials below are throwaway values for an in-memory MySQL that only exists inside this
+# compose network and publishes no host port. They are not secrets; real credentials belong in
+# .env (see .env.example) and are never committed.
+services:
+  mysql:
+    image: mysql:8.4
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=+00:00
+    environment:
+      MYSQL_ROOT_PASSWORD: e2e-root-password
+      MYSQL_DATABASE: mediconcen_code_test_e2e
+      MYSQL_USER: e2e_app_user
+      MYSQL_PASSWORD: e2e-app-password
+    # An in-memory data directory means every run starts from an empty database and nothing
+    # from a previous attempt can survive it.
+    tmpfs:
+      - /var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  e2e:
+    build:
+      context: .
+      target: test
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: test
+      APP_PORT: 3000
+      LOG_LEVEL: error
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_USER: e2e_app_user
+      MYSQL_PASSWORD: e2e-app-password
+      MYSQL_DATABASE: mediconcen_code_test_e2e
+      MYSQL_POOL_SIZE: 20
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      USER_ID_CACHE_TTL_SECONDS: 60

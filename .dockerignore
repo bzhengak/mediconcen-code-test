@@ -1,0 +1,23 @@
+# Rebuilt inside the image; copying them in would defeat the layer cache.
+node_modules
+dist
+coverage
+*.tsbuildinfo
+
+# Version control and local environment
+.git
+.env
+.env.*
+*.log
+
+# Not needed by the runtime or the test stage
+Dockerfile
+docker-compose.yml
+docker-compose.test.yml
+.dockerignore
+
+# Local editor and OS noise
+.vscode
+.idea
+.DS_Store
+Thumbs.db
