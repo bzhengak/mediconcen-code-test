@@ -1,4 +1,3 @@
-import { Logger } from '@nestjs/common';
 import type { INestApplication } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
@@ -7,7 +6,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
  * reviewer can reach it straight from the container; behind a real deployment it would be an
  * internal-only route.
  */
-export function setupSwagger(app: INestApplication, port: number): void {
+export function setupSwagger(app: INestApplication): void {
   const document = SwaggerModule.createDocument(
     app,
     new DocumentBuilder()
@@ -28,5 +27,4 @@ export function setupSwagger(app: INestApplication, port: number): void {
   SwaggerModule.setup('docs', app, document, {
     swaggerOptions: { docExpansion: 'list', tryItOutEnabled: true },
   });
-  Logger.log(`API docs at http://localhost:${port}/docs`, 'Bootstrap');
 }
