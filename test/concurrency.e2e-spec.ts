@@ -1,4 +1,5 @@
 import { INestApplication } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { getDataSourceToken } from '@nestjs/typeorm';
 import { Redis } from 'ioredis';
@@ -51,10 +52,11 @@ describe('concurrent requests (e2e)', () => {
     url = await app.getUrl();
 
     dataSource = app.get<DataSource>(getDataSourceToken());
+    const config = app.get(ConfigService);
     cache = new Redis({
-      host: process.env.REDIS_HOST,
-      port: Number(process.env.REDIS_PORT ?? 6379),
-      password: process.env.REDIS_PASSWORD || undefined,
+      host: config.getOrThrow<string>('REDIS_HOST'),
+      port: config.getOrThrow<number>('REDIS_PORT'),
+      password: config.get<string>('REDIS_PASSWORD') || undefined,
       lazyConnect: true,
     });
     await cache.connect();

@@ -25,9 +25,10 @@ const typeOrmOptions = (config: ConfigService): TypeOrmModuleOptions => ({
   // records what it applied, so repeated starts are no-ops.
   migrationsRun: true,
   timezone: 'Z',
-  logging: config.get<boolean>('MYSQL_LOGGING')
-    ? ['error', 'warn', 'migration']
-    : false,
+  logging:
+    config.get<string>('MYSQL_LOGGING') === 'true'
+      ? ['error', 'warn', 'migration']
+      : false,
   extra: { connectionLimit: config.getOrThrow<number>('MYSQL_POOL_SIZE') },
 });
 

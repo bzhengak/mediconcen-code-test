@@ -2,6 +2,7 @@ import { plainToInstance } from 'class-transformer';
 import {
   IsBooleanString,
   IsEnum,
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -28,7 +29,7 @@ export class AppEnvironmentVariables {
   @IsOptional()
   APP_PORT = 3000;
 
-  @IsString()
+  @IsIn(['error', 'warn', 'log', 'debug', 'verbose'])
   @IsOptional()
   LOG_LEVEL = 'log';
 
@@ -60,9 +61,11 @@ export class AppEnvironmentVariables {
   @IsOptional()
   MYSQL_POOL_SIZE = 10;
 
+  // Deliberately a string: `false` in a .env file is text, and the callers compare it to
+  // 'true' rather than relying on a coercion that would read 'false' as truthy.
   @IsBooleanString()
   @IsOptional()
-  MYSQL_LOGGING: boolean | string = false;
+  MYSQL_LOGGING = 'false';
 
   @IsString()
   @IsNotEmpty()

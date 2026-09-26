@@ -1,4 +1,5 @@
 import { INestApplication } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { getDataSourceToken } from '@nestjs/typeorm';
 import { createHash } from 'node:crypto';
@@ -16,10 +17,10 @@ describe('POST /api/v1/user-id/resolve (e2e)', () => {
   let app: INestApplication;
   let dataSource: DataSource;
   let redis: Redis;
+  let keyPrefix: string;
 
   function cacheKey(id1: string, id2: string): string {
-    const prefix = process.env.USER_ID_CACHE_KEY_PREFIX ?? 'v1:user-id-mapping';
-    return `${prefix}:${createHash('sha256')
+    return `${keyPrefix}:${createHash('sha256')
       .update(JSON.stringify([id1, id2]))
       .digest('hex')}`;
   }
@@ -51,11 +52,16 @@ describe('POST /api/v1/user-id/resolve (e2e)', () => {
     configureApp(app);
     await app.init();
 
+    // Read the same resolved configuration the application uses, so a change in .env or in the
+    // defaults cannot leave the test asserting against a different Redis or key namespace.
+    const config = app.get(ConfigService);
+    keyPrefix = config.getOrThrow<string>('USER_ID_CACHE_KEY_PREFIX');
+
     dataSource = app.get<DataSource>(getDataSourceToken());
     redis = new Redis({
-      host: process.env.REDIS_HOST,
-      port: Number(process.env.REDIS_PORT ?? 6379),
-      password: process.env.REDIS_PASSWORD || undefined,
+      host: config.getOrThrow<string>('REDIS_HOST'),
+      port: config.getOrThrow<number>('REDIS_PORT'),
+      password: config.get<string>('REDIS_PASSWORD') || undefined,
       lazyConnect: true,
     });
     await redis.connect();
