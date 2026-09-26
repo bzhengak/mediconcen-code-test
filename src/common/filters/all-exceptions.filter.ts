@@ -44,10 +44,11 @@ export class AllExceptionsFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       statusCode = exception.getStatus();
       const body = exception.getResponse();
-      const record = (typeof body === 'string'
-        ? { message: body }
-        : body) as Record<string, unknown>;
-      error = typeof record.error === 'string' ? record.error : DEFAULT_ERROR_LABEL;
+      const record = (
+        typeof body === 'string' ? { message: body } : body
+      ) as Record<string, unknown>;
+      error =
+        typeof record.error === 'string' ? record.error : DEFAULT_ERROR_LABEL;
       const messages = this.asMessages(record.message);
       message = messages.join('; ');
       details = messages.length > 1 ? messages : undefined;
