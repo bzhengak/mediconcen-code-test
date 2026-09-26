@@ -58,7 +58,7 @@ export class UserIdCache implements OnModuleDestroy {
     // which would take the whole process down.
     this.redis.on('error', (error: Error) => {
       this.status = 'connecting';
-      this.warnOnceUnavailable(error);
+      this.warnOnceUnavailable('connect', error);
     });
   }
 
@@ -92,7 +92,8 @@ export class UserIdCache implements OnModuleDestroy {
 
   async onModuleDestroy(): Promise<void> {
     this.status = 'closed';
-    await this.run('QUIT', () => this.redis.quit()).catch(() => undefined);
+    // A client that is already gone rejects here; losing that would be noise, not a failure.
+    await this.redis.quit().catch(() => undefined);
   }
 
   /** Never rejects: the database is authoritative, so a cache failure must not surface as a 500. */
@@ -103,19 +104,19 @@ export class UserIdCache implements OnModuleDestroy {
     try {
       return await action();
     } catch (error) {
-      this.warnOnceUnavailable(error);
+      this.warnOnceUnavailable(operation, error);
       return null;
     }
   }
 
-  private warnOnceUnavailable(error: unknown): void {
+  private warnOnceUnavailable(operation: string, error: unknown): void {
     if (this.warnedWhileUnavailable) {
       return;
     }
     this.warnedWhileUnavailable = true;
     const reason = error instanceof Error ? error.message : String(error);
     this.logger.warn(
-      `redis cache unavailable, serving from MySQL only: ${reason}`,
+      `redis cache unavailable during ${operation}, serving from MySQL only: ${reason}`,
     );
   }
 
