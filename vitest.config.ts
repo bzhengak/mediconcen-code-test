@@ -8,6 +8,8 @@ export default defineConfig({
   test: {
     globals: true,
     root: './',
-    include: ['**/*.spec.ts'],
+    // Unit specs sit beside the code they cover; the e2e suite is configured separately
+    // because it needs a live MySQL and Redis.
+    include: ['src/**/*.spec.ts'],
   },
 });

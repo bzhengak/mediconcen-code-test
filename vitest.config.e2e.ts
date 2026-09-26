@@ -6,6 +6,11 @@ export default defineConfig({
   test: {
     globals: true,
     root: './',
-    include: ['**/*.e2e-spec.ts'],
+    include: ['test/**/*.e2e-spec.ts'],
+    // The suites share one database and each of them empties it, so they must not overlap.
+    fileParallelism: false,
+    // Booting the datasource, applying migrations and a 30-way race need more than the default.
+    testTimeout: 30000,
+    hookTimeout: 60000,
   },
 });
