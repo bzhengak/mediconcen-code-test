@@ -6,9 +6,11 @@ import { ResolveUserIdDto } from './resolve-user-id.dto.js';
 
 function messagesFor(payload: unknown): string[] {
   const instance = plainToInstance(ResolveUserIdDto, payload);
-  return validateSync(instance, { whitelist: false }).flatMap((error) =>
-    Object.values(error.constraints ?? {}),
-  );
+  // Same options as the global ValidationPipe, so this suite asserts what the API returns.
+  return validateSync(instance, {
+    whitelist: false,
+    stopAtFirstError: true,
+  }).flatMap((error) => Object.values(error.constraints ?? {}));
 }
 
 function instanceFor(payload: unknown): ResolveUserIdDto {
@@ -32,35 +34,45 @@ describe('ResolveUserIdDto', () => {
   });
 
   it('treats a value that is whitespace only as missing', () => {
-    const messages = messagesFor({ id1: '   ', id2: 'XYZ456' });
-
-    expect(messages).toContain('id1 is required');
+    expect(messagesFor({ id1: '   ', id2: 'XYZ456' })).toEqual([
+      'id1 is required',
+    ]);
   });
 
-  it('reports both identifiers when neither is supplied', () => {
-    const messages = messagesFor({});
+  it('reports both identifiers once when neither is supplied', () => {
+    expect(messagesFor({})).toEqual(['id1 is required', 'id2 is required']);
+  });
 
-    expect(messages).toContain('id1 must be a string');
-    expect(messages).toContain('id2 must be a string');
+  it('reports one message per identifier, not one per broken constraint', () => {
+    expect(messagesFor({ id1: '', id2: 123 })).toEqual([
+      'id1 is required',
+      'id2 must be a string',
+    ]);
+  });
+
+  it('treats null as a missing identifier', () => {
+    expect(messagesFor({ id1: null, id2: 'XYZ456' })).toEqual([
+      'id1 is required',
+    ]);
   });
 
   it.each([
-    ['null', null],
     ['a number', 123],
     ['an object', { nested: true }],
     ['an array', ['ABC123']],
+    ['a boolean', true],
   ])('rejects %s where a string is required', (_label, value) => {
-    expect(messagesFor({ id1: value, id2: 'XYZ456' })).toContain(
+    expect(messagesFor({ id1: value, id2: 'XYZ456' })).toEqual([
       'id1 must be a string',
-    );
+    ]);
   });
 
   it('rejects an identifier at the column limit plus one', () => {
     const tooLong = 'a'.repeat(MAX_BUSINESS_ID_LENGTH + 1);
 
-    expect(messagesFor({ id1: tooLong, id2: 'XYZ456' })).toContain(
+    expect(messagesFor({ id1: tooLong, id2: 'XYZ456' })).toEqual([
       `id1 must be at most ${MAX_BUSINESS_ID_LENGTH} characters`,
-    );
+    ]);
   });
 
   it('accepts an identifier exactly at the column limit', () => {
@@ -69,14 +81,16 @@ describe('ResolveUserIdDto', () => {
     ).toEqual([]);
   });
 
+  const CONTROL_CHARACTER = 'ABC' + String.fromCharCode(0) + '123';
+
   it.each([
-    ['a nul byte', 'ABC\u0000123'],
+    ['a nul byte', CONTROL_CHARACTER],
     ['a newline', 'ABC\n123'],
     ['a tab', 'ABC\t123'],
   ])('rejects %s inside an identifier', (_label, value) => {
-    expect(messagesFor({ id1: value, id2: 'XYZ456' })).toContain(
+    expect(messagesFor({ id1: value, id2: 'XYZ456' })).toEqual([
       'id1 must not contain control characters',
-    );
+    ]);
   });
 
   // Identifiers arrive from other insurers' systems, so anything that is printable is stored
@@ -85,7 +99,8 @@ describe('ResolveUserIdDto', () => {
     ['Chinese characters', '保單-A1'],
     ['an embedded space', 'POLICY 2026'],
     ['an accent', 'café-01'],
-    ['a high code point', '𝐀-01'],
+    ['a high code point', '\u{1D400}-01'],
+    ['a leading digit', '00123'],
   ])('accepts %s', (_label, value) => {
     expect(messagesFor({ id1: value, id2: 'XYZ456' })).toEqual([]);
   });

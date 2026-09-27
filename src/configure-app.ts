@@ -16,6 +16,9 @@ export function configureApp(app: INestApplication): void {
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
+      // class-validator options are passed through directly: one clear problem per field, so a
+      // 400 reads as a fix list instead of every constraint a bad value happens to break.
+      stopAtFirstError: true,
     }),
   );
   app.useGlobalFilters(new AllExceptionsFilter());
