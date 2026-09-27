@@ -217,7 +217,7 @@ problem can be traced without exposing internals.
 
 | Route | Purpose |
 | --- | --- |
-| `GET /api/v1/health` | MySQL and Redis status with latency. Always `200` while serving; `status` becomes `degraded` when Redis is unreachable, which is expected behaviour. |
+| `GET /api/v1/health` | MySQL and Redis status with latency for each. Always `200` while serving; `status` becomes `degraded` when a dependency is unreachable, which is expected behaviour. Each check reports only `status` and `latencyMs` - the reason (an internal host name, a driver message) stays in the server log. |
 | `GET /api/v1/ready` | Readiness for a load balancer and the container healthcheck. `503` only when MySQL is unreachable. |
 | `GET /docs` | Swagger UI. |
 | `GET /docs-json` | The OpenAPI 3 document. |
@@ -235,6 +235,8 @@ npm test
 They cover the environment validation that gates startup, the service (cache hit, stored hit, new
 insert, duplicate-key race, genuine database failure), the cache with a faked Redis client
 (fail-fast settings, hashed keys, TTL jitter, degradation, single warning per outage, shutdown),
+the health report (status and latency only, a driver message kept out of the body, one log line
+per change of state, parallel probes, readiness),
 request validation, the exception filter and log masking.
 
 ### End-to-end tests - real MySQL and Redis, in containers
@@ -269,7 +271,7 @@ npm run test:e2e
 > **Warning:** the e2e files `TRUNCATE` `user_id_mappings` and flush the cache between cases.
 > Point `MYSQL_DATABASE` in `.env` at a disposable schema - never at data you care about.
 
-Coverage: `npm run test:cov` - the 60 unit tests report **96.6% statements / 96.5% lines**; the
+Coverage: `npm run test:cov` - the 69 unit tests report **98% statements / 98% lines**; the
 e2e suites cover what a unit test cannot, namely real MySQL constraints, the Redis client and
 HTTP behaviour, and are deliberately not merged into that figure. Lint: `npm run lint`.
 Formatting: `npm run format`.
@@ -329,6 +331,21 @@ Deliberate choices:
   requests over a real HTTP listener (supertest would serialise them through one socket) and checks
   for one row and one shared `userID`.
 - `uk_user_id` additionally guarantees no two pairs can ever be issued the same `userID`.
+
+---
+
+## Resilience
+
+Both dependency failures were checked against a running stack by stopping its containers, not only
+by asserting them in the e2e suite:
+
+| Situation | Measured behaviour |
+| --- | --- |
+| Redis stopped | Requests keep returning the stored `userID` from MySQL. `/health` answers `200` with `status: degraded`, `/ready` stays `200`, one `WARN` is logged for the whole outage, and when Redis comes back the client reconnects by itself and health returns to `ok`. |
+| MySQL stopped | The process keeps serving: `/ready` answers `503`, `/health` answers `200` with `mysql: down`, and `POST` answers `500` with the generic message plus a `requestId`. The driver error and stack trace appear only in the log. Restarting MySQL restores service with no intervention, and the same pair still returns the same `userID`. |
+
+Neither case can become an unhandled rejection: the cache swallows Redis faults by design, and
+every query error funnels through `AllExceptionsFilter`.
 
 ---
 
@@ -494,7 +511,8 @@ docker-compose.test.yml       the same, arranged for one e2e run
   `user_id_mappings` plus the TypeORM `migrations` table. The root password is only used by
   `docker-compose.yml` to provision the container, and is never read by the application.
 - **Error responses** carry a generic message for anything unexpected; the driver message and stack
-  trace go to the server log under the request id.
+  trace go to the server log under the request id. `/health` and `/ready` report only dependency
+  status and latency, so an unreachable internal host name is never returned to a caller.
 - **No SQL string interpolation**: parameter binding throughout, and the only raw SQL is the fixed
   DDL in the migration.
 - The e2e compose file contains throwaway credentials for an in-memory database that publishes no
