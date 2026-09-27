@@ -41,7 +41,8 @@ same pair returns the stored value, so the endpoint is idempotent and safe for a
 
 **Running the API on the host instead**
 
-- Node.js 22 or newer (`npm ci` reproduces the locked dependency tree exactly)
+- Node.js **20.19 or newer** (the floor set by TypeORM and `@nestjs/typeorm`; the suites were run
+  on 20.20 on the host and the image is built on Node 24)
 - A MySQL 8 server and a Redis 7 server reachable from the host
 
 ---
@@ -65,6 +66,11 @@ application reads.
 `src/config/env.validation.ts` validates the environment with `class-validator` **before** the
 application starts, so a missing or malformed value fails fast with a readable list of problems
 instead of surfacing later as a runtime error.
+
+Every numeric variable carries an explicit `@Type(() => Number)`. An environment is text, and
+relying on implicit conversion here let the containerised API die at startup with
+`APP_PORT must be an integer` - TypeScript emits `design:type: Object` for properties whose type
+is only inferred, so the conversion never happened. That failure is now covered by tests.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -226,10 +232,10 @@ problem can be traced without exposing internals.
 npm test
 ```
 
-They cover the service (cache hit, stored hit, new insert, duplicate-key race, genuine database
-failure), the cache with a faked Redis client (fail-fast settings, hashed keys, TTL jitter,
-degradation, single warning per outage, shutdown), request validation, the exception filter and
-log masking.
+They cover the environment validation that gates startup, the service (cache hit, stored hit, new
+insert, duplicate-key race, genuine database failure), the cache with a faked Redis client
+(fail-fast settings, hashed keys, TTL jitter, degradation, single warning per outage, shutdown),
+request validation, the exception filter and log masking.
 
 ### End-to-end tests - real MySQL and Redis, in containers
 
@@ -263,7 +269,10 @@ npm run test:e2e
 > **Warning:** the e2e files `TRUNCATE` `user_id_mappings` and flush the cache between cases.
 > Point `MYSQL_DATABASE` in `.env` at a disposable schema - never at data you care about.
 
-Coverage: `npm run test:cov`. Lint: `npm run lint`. Formatting: `npm run format`.
+Coverage: `npm run test:cov` - the 60 unit tests report **96.6% statements / 96.5% lines**; the
+e2e suites cover what a unit test cannot, namely real MySQL constraints, the Redis client and
+HTTP behaviour, and are deliberately not merged into that figure. Lint: `npm run lint`.
+Formatting: `npm run format`.
 
 ---
 
@@ -462,7 +471,11 @@ src/
     dto/                      request and response contracts (validated, documented)
     entities/                 the single table
   health/                     status and readiness
-test/                         e2e suites: contract, concurrency, Redis outage
+test/
+  user-id.e2e-spec.ts         contract suite against a live MySQL and Redis
+  concurrency.e2e-spec.ts     the insert race, over a real HTTP listener
+  outage/                     the suite that needs Redis to be unreachable
+  endpoint.ts                 the route path, shared by the suites
 Dockerfile                    deps -> build -> test / runtime stages
 docker-compose.yml            api + mysql + redis for development
 docker-compose.test.yml       the same, arranged for one e2e run
