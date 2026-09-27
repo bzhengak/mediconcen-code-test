@@ -237,11 +237,24 @@ log masking.
 npm run test:e2e:docker
 ```
 
-This starts an in-memory MySQL and a Redis on a throwaway compose network, runs `npm run test:e2e`
-inside the image, and exits with the suite's status. The database is empty every run, so there is
-nothing to clean up.
+This starts an in-memory MySQL and a Redis on a throwaway compose network, then runs **two**
+suites in order inside the image and exits with their status. The database is empty every run, so
+there is nothing to clean up.
 
-To run the same suites against your own MySQL and Redis:
+| Suite | Run by | Environment it needs | Proves |
+| --- | --- | --- | --- |
+| `test/user-id.e2e-spec.ts` | `npm run test:e2e` | reachable Redis | The contract: generation, idempotence, persistence, the warm cache entry, case-sensitive pairs, every 400 case, error shape, request-id reuse, health, readiness, the OpenAPI document. |
+| `test/concurrency.e2e-spec.ts` | `npm run test:e2e` | reachable Redis | 30 simultaneous requests for one unseen pair produce **one row and one `userID`**, and 30 different pairs stay distinct. |
+| `test/outage/redis-outage.e2e-spec.ts` | `npm run test:e2e:outage` | an **unreachable** Redis | Requests still succeed and repeat correctly from MySQL alone, `/health` reports `degraded`, and `/ready` stays `200`. |
+
+The outage suite has its own Vitest configuration for a reason worth stating: the application
+snapshots its environment while the Nest module graph is imported, so assigning
+`process.env.REDIS_HOST` inside a spec file is silently ignored. An earlier version of this suite
+did exactly that - it passed while testing a live cache, i.e. nothing. The dead endpoint is now
+supplied in the process environment before Node starts, and the suite's first case asserts that
+Redis really is unreachable, so a wrong precondition fails loudly instead of flattering the result.
+
+To run the contract and concurrency suites against your own MySQL and Redis:
 
 ```bash
 npm run test:e2e
@@ -249,12 +262,6 @@ npm run test:e2e
 
 > **Warning:** the e2e files `TRUNCATE` `user_id_mappings` and flush the cache between cases.
 > Point `MYSQL_DATABASE` in `.env` at a disposable schema - never at data you care about.
-
-| File | Proves |
-| --- | --- |
-| `test/user-id.e2e-spec.ts` | The contract: generation, idempotence, persistence, the warm cache entry, case-sensitive pairs, every 400 case, error shape, request-id reuse, health and readiness. |
-| `test/concurrency.e2e-spec.ts` | 30 simultaneous requests for one unseen pair produce **one row and one `userID`**, and 30 different pairs stay distinct. |
-| `test/redis-outage.e2e-spec.ts` | With Redis pointed at a closed port, requests still succeed and repeat correctly, `/health` reports `degraded`, and `/ready` stays `200`. |
 
 Coverage: `npm run test:cov`. Lint: `npm run lint`. Formatting: `npm run format`.
 

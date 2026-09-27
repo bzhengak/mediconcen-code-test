@@ -47,6 +47,13 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    # The second suite needs the opposite of the first one: a Redis that cannot be reached.
+    # Overriding the endpoint for that one command - rather than inside the test process -
+    # matters, because the configuration is read while the Nest module graph is imported.
+    command:
+      - sh
+      - -c
+      - npm run test:e2e && REDIS_HOST=127.0.0.1 REDIS_PORT=1 npm run test:e2e:outage
     environment:
       NODE_ENV: test
       APP_PORT: 3000
