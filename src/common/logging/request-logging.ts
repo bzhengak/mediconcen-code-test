@@ -6,21 +6,12 @@ export interface HttpRequest {
 
 export interface LoggingHandle {
   succeed(statusCode: number): void;
-  fail(error: unknown): void;
 }
 
 export interface RequestLogger {
   log(message: string): void;
   warn(message: string): void;
   error(message: string): void;
-}
-
-export interface ObservableLike<T> {
-  subscribe(observer: {
-    next?: (value: T) => void;
-    error?: (err: unknown) => void;
-    complete?: () => void;
-  }): unknown;
 }
 
 /**
@@ -50,10 +41,6 @@ export function startRequestLogging(
       } else {
         logger.log(line);
       }
-    },
-    fail(error: unknown): void {
-      const reason = error instanceof Error ? error.message : String(error);
-      logger.error(`${describeRequest(req)} -> failed: ${reason}`);
     },
   };
 }
